@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const API_URL = "http://localhost:9601";
+  const API_URL = window.location.protocol + "//" + window.location.hostname + ":9601";
 
   // ── DOM refs ────────────────────────────────────────────
   const fileInput = document.getElementById("file-input");
