@@ -10,8 +10,12 @@
   <header>
     <h1>Sprite Sheet Slicer</h1>
     <p class="subtitle">Asset Generator for Flutter Flame</p>
-  </header>
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="slicer">&#127912; Sprite Slicer</button>
+    <button class="tab-btn" data-tab="resize">&#8596; Image Resize</button>
+  </nav>
 
+<div id="tab-slicer" class="tab-panel">
   <main>
     <!-- Upload Section -->
     <section class="card" id="upload-section">
@@ -64,6 +68,31 @@
       <div id="preview-grid" class="preview-grid"></div>
     </section>
 
+    <!-- Optimize Section -->
+    <section class="card hidden" id="optimize-section">
+      <h2>3.5. Optimize Image <span class="badge-optional">Optional</span></h2>
+      <p class="section-hint">Resize the source image before export. Frame coordinates will scale automatically.</p>
+      <div class="optimize-controls">
+        <div class="input-group">
+          <label>Resize Mode</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="optimize-mode" value="width" checked> By Width</label>
+            <label class="radio-label"><input type="radio" name="optimize-mode" value="percent"> By Percent</label>
+          </div>
+        </div>
+        <div class="input-group" id="optimize-width-group">
+          <label for="optimize-width">Target Width (px)</label>
+          <input type="number" id="optimize-width" min="1" value="512">
+        </div>
+        <div class="input-group hidden" id="optimize-percent-group">
+          <label for="optimize-percent">Scale (%)</label>
+          <input type="number" id="optimize-percent" min="1" max="400" value="50">
+        </div>
+        <button id="btn-optimize" class="btn btn-primary">Apply Optimization</button>
+      </div>
+      <div id="optimize-status" class="export-status hidden"></div>
+    </section>
+
     <!-- Export Section -->
     <section class="card hidden" id="export-section">
       <h2>4. Export</h2>
@@ -73,6 +102,11 @@
           <input type="text" id="input-prefix" placeholder="player_run" value="sprite">
         </div>
         <button id="btn-export" class="btn btn-accent">Export Sliced Images (ZIP)</button>
+      </div>
+      <div id="frame-names-section" class="hidden">
+        <h3 class="frame-names-title">Frame Names</h3>
+        <p class="section-hint">Customize the filename for each frame. Leave blank to use the auto-generated name.</p>
+        <div id="frame-names-grid" class="frame-names-grid"></div>
       </div>
       <div id="export-status" class="export-status hidden"></div>
     </section>
@@ -99,6 +133,76 @@
       <div id="gif-status" class="export-status hidden"></div>
     </section>
   </main>
+</div>
+
+<div id="tab-resize" class="tab-panel hidden">
+  <main>
+
+    <!-- Resize Upload Section -->
+    <section class="card" id="resize-upload-section">
+      <h2>1. Upload Image</h2>
+      <div class="upload-area" id="resize-drop-zone">
+        <label for="resize-file-input" class="upload-label">
+          <span class="upload-icon">&#128444;</span>
+          <span>Click to select or drag &amp; drop an image</span>
+          <span class="upload-hint">PNG or JPEG</span>
+        </label>
+        <input type="file" id="resize-file-input" accept="image/png, image/jpeg" hidden>
+      </div>
+      <div id="resize-image-info" class="image-info hidden">
+        <span id="resize-info-filename"></span>
+        <span id="resize-info-dimensions"></span>
+      </div>
+    </section>
+
+    <!-- Resize Options Section -->
+    <section class="card hidden" id="resize-options-section">
+      <h2>2. Resize Options</h2>
+      <div class="optimize-controls">
+        <div class="input-group">
+          <label>Resize Mode</label>
+          <div class="radio-group">
+            <label class="radio-label"><input type="radio" name="resize-mode" value="width" checked> By Width</label>
+            <label class="radio-label"><input type="radio" name="resize-mode" value="percent"> By Percent</label>
+          </div>
+        </div>
+        <div class="input-group" id="resize-width-group">
+          <label for="resize-width-val">Target Width (px)</label>
+          <input type="number" id="resize-width-val" min="1" value="512">
+        </div>
+        <div class="input-group hidden" id="resize-percent-group">
+          <label for="resize-percent-val">Scale (%)</label>
+          <input type="number" id="resize-percent-val" min="1" max="400" value="50">
+        </div>
+        <button id="btn-resize-apply" class="btn btn-primary">Resize &amp; Preview</button>
+      </div>
+      <div id="resize-status" class="export-status hidden"></div>
+    </section>
+
+    <!-- Resize Preview Section -->
+    <section class="card hidden" id="resize-preview-section">
+      <h2>3. Preview &amp; Download</h2>
+      <div class="resize-preview-pair">
+        <div class="resize-preview-box">
+          <div class="resize-preview-label">Original</div>
+          <canvas id="resize-before-canvas"></canvas>
+          <div id="resize-before-info" class="resize-dim-info"></div>
+        </div>
+        <div class="resize-preview-arrow">&#8594;</div>
+        <div class="resize-preview-box">
+          <div class="resize-preview-label">Resized</div>
+          <canvas id="resize-after-canvas"></canvas>
+          <div id="resize-after-info" class="resize-dim-info"></div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
+        <button id="btn-resize-download" class="btn btn-accent">&#8595; Download Resized Image</button>
+        <button id="btn-resize-again" class="btn btn-outline">Resize Again</button>
+      </div>
+    </section>
+
+  </main>
+</div>
 
   <footer>
     <p>Sprite Sheet Slicer &mdash; Internal Tool</p>

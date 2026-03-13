@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"strings"
 
 	_ "image/jpeg"
 
@@ -58,7 +59,16 @@ func Process(imageReader io.Reader, originalFilename string, req models.ExportRe
 		rect := image.Rect(frame.X, frame.Y, frame.X+frame.Width, frame.Y+frame.Height)
 		cropped := simg.SubImage(rect)
 
-		filename := fmt.Sprintf("%s_%0*d.png", req.Prefix, digits, i+1)
+		var filename string
+		if frame.Name != "" {
+			if strings.HasSuffix(frame.Name, ".png") {
+				filename = frame.Name
+			} else {
+				filename = frame.Name + ".png"
+			}
+		} else {
+			filename = fmt.Sprintf("%s_%0*d.png", req.Prefix, digits, i+1)
+		}
 		path := "images/" + filename
 
 		fw, err := zw.Create(path)

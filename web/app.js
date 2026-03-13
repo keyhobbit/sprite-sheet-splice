@@ -35,6 +35,35 @@
   const btnExportGIF = document.getElementById("btn-export-gif");
   const gifStatus = document.getElementById("gif-status");
 
+  // ── New DOM refs ─────────────────────────────────────────
+  // Tab switching
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabSlicer = document.getElementById("tab-slicer");
+  const tabResize = document.getElementById("tab-resize");
+  // Optimize panel
+  const optimizeSection = document.getElementById("optimize-section");
+  const btnOptimize = document.getElementById("btn-optimize");
+  const optimizeStatus = document.getElementById("optimize-status");
+  // Frame names
+  const frameNamesSection = document.getElementById("frame-names-section");
+  const frameNamesGrid = document.getElementById("frame-names-grid");
+  // Resize tool tab
+  const resizeFileInput = document.getElementById("resize-file-input");
+  const resizeDropZone = document.getElementById("resize-drop-zone");
+  const resizeImageInfo = document.getElementById("resize-image-info");
+  const resizeInfoFilename = document.getElementById("resize-info-filename");
+  const resizeInfoDimensions = document.getElementById("resize-info-dimensions");
+  const resizeOptionsSection = document.getElementById("resize-options-section");
+  const btnResizeApply = document.getElementById("btn-resize-apply");
+  const resizeStatus = document.getElementById("resize-status");
+  const resizePreviewSection = document.getElementById("resize-preview-section");
+  const resizeBeforeCanvas = document.getElementById("resize-before-canvas");
+  const resizeAfterCanvas = document.getElementById("resize-after-canvas");
+  const resizeBeforeInfo = document.getElementById("resize-before-info");
+  const resizeAfterInfo = document.getElementById("resize-after-info");
+  const btnResizeDownload = document.getElementById("btn-resize-download");
+  const btnResizeAgain = document.getElementById("btn-resize-again");
+
   const ctx = mainCanvas.getContext("2d");
 
   // ── State ───────────────────────────────────────────────
@@ -48,6 +77,11 @@
   let hLines = []; // horizontal lines (rows+1 values)
   let vLines = []; // vertical lines (cols+1 values)
   let draggingLine = null; // {type:'h'|'v', index}
+
+  // Resize tool state
+  let resizeFile = null;
+  let resizeOriginalImg = null;
+  let resizedBlob = null;
 
   // Animation state
   let animSelectedIndices = new Set();
@@ -305,9 +339,11 @@
     redrawCanvasWithGrid();
     renderPreviews();
     previewSection.classList.remove("hidden");
+    optimizeSection.classList.remove("hidden");
     exportSection.classList.remove("hidden");
     animSection.classList.remove("hidden");
     buildAnimStrip();
+    renderFrameNamesGrid();
   });
 
   function rebuildFramesFromGrid() {
@@ -539,7 +575,12 @@
     if (!originalFile || frames.length === 0) return;
 
     const prefix = inputPrefix.value.trim() || "sprite";
-    const config = JSON.stringify({ prefix, frames });
+    const namedFrames = frames.map((f) => {
+      const nameInput = document.getElementById("frame-name-" + f.id);
+      const customName = nameInput ? nameInput.value.trim() : "";
+      return Object.assign({}, f, { name: customName });
+    });
+    const config = JSON.stringify({ prefix, frames: namedFrames });
 
     const formData = new FormData();
     formData.append("image", originalFile);
@@ -734,4 +775,270 @@
     el.className = "export-status " + type;
     el.classList.remove("hidden");
   }
+
+  // ── Tab Switching ────────────────────────────────────────
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.dataset.tab;
+      tabSlicer.classList.toggle("hidden", tab !== "slicer");
+      tabResize.classList.toggle("hidden", tab !== "resize");
+    });
+  });
+
+  // ── Optimize Panel ───────────────────────────────────────
+
+  document.querySelectorAll('input[name="optimize-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const isWidth = document.querySelector('input[name="optimize-mode"]:checked').value === "width";
+      document.getElementById("optimize-width-group").classList.toggle("hidden", !isWidth);
+      document.getElementById("optimize-percent-group").classList.toggle("hidden", isWidth);
+    });
+  });
+
+  btnOptimize.addEventListener("click", async () => {
+    if (!originalFile) return;
+
+    btnOptimize.disabled = true;
+    btnOptimize.textContent = "Optimizing...";
+    showStatus(optimizeStatus, "", "");
+
+    try {
+      const mode = document.querySelector('input[name="optimize-mode"]:checked').value;
+      const formData = new FormData();
+      formData.append("image", originalFile);
+
+      if (mode === "width") {
+        const w = parseInt(document.getElementById("optimize-width").value, 10);
+        if (!w || w <= 0) throw new Error("Invalid width value");
+        formData.append("width", String(w));
+      } else {
+        const pct = parseFloat(document.getElementById("optimize-percent").value);
+        if (!pct || pct <= 0) throw new Error("Invalid percent value");
+        formData.append("percent", String(pct));
+      }
+
+      const res = await fetch(API_URL + "/api/resize", { method: "POST", body: formData });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Resize failed with status " + res.status);
+      }
+
+      const blob = await res.blob();
+      const oldW = loadedImage.width;
+      const oldH = loadedImage.height;
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const newW = img.width;
+        const newH = img.height;
+        const scaleX = newW / oldW;
+        const scaleY = newH / oldH;
+
+        frames.forEach((f) => {
+          f.x = Math.round(f.x * scaleX);
+          f.y = Math.round(f.y * scaleY);
+          f.width = Math.max(1, Math.round(f.width * scaleX));
+          f.height = Math.max(1, Math.round(f.height * scaleY));
+        });
+
+        loadedImage = img;
+        originalFile = new File([blob], originalFile.name.replace(/\.\w+$/, ".png"), { type: "image/png" });
+        showImageInfo(originalFile.name, newW, newH);
+        drawMainCanvas();
+        drawGridOverlay();
+        renderPreviews();
+        buildAnimStrip();
+        renderFrameNamesGrid();
+        URL.revokeObjectURL(url);
+        showStatus(optimizeStatus, "Optimized: " + oldW + "\u00d7" + oldH + " \u2192 " + newW + "\u00d7" + newH, "success");
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); throw new Error("Failed to load resized image"); };
+      img.src = url;
+    } catch (err) {
+      showStatus(optimizeStatus, "Error: " + err.message, "error");
+    } finally {
+      btnOptimize.disabled = false;
+      btnOptimize.textContent = "Apply Optimization";
+    }
+  });
+
+  // ── Frame Names Grid ─────────────────────────────────────
+
+  inputPrefix.addEventListener("input", () => {
+    renderFrameNamesGrid();
+  });
+
+  function fnDigitCount(n) {
+    if (n < 10) return 2;
+    let count = 0;
+    while (n > 0) { count++; n = Math.floor(n / 10); }
+    return count;
+  }
+
+  function renderFrameNamesGrid() {
+    if (!frameNamesGrid || frames.length === 0 || !loadedImage) return;
+    frameNamesGrid.innerHTML = "";
+
+    const prefix = inputPrefix.value.trim() || "sprite";
+    const digits = fnDigitCount(frames.length);
+
+    frames.forEach((frame, i) => {
+      const row = document.createElement("div");
+      row.className = "frame-name-row";
+
+      const thumb = document.createElement("canvas");
+      thumb.width = 40;
+      thumb.height = 40;
+      thumb.className = "frame-name-thumb";
+      const tctx = thumb.getContext("2d");
+      const sc = Math.min(40 / frame.width, 40 / frame.height);
+      const dw = frame.width * sc;
+      const dh = frame.height * sc;
+      tctx.drawImage(loadedImage, frame.x, frame.y, frame.width, frame.height,
+        (40 - dw) / 2, (40 - dh) / 2, dw, dh);
+
+      const lbl = document.createElement("span");
+      lbl.className = "frame-name-label";
+      lbl.textContent = "#" + (i + 1);
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.id = "frame-name-" + frame.id;
+      input.className = "frame-name-input";
+      input.placeholder = prefix + "_" + String(i + 1).padStart(digits, "0");
+      input.value = "";
+
+      row.appendChild(thumb);
+      row.appendChild(lbl);
+      row.appendChild(input);
+      frameNamesGrid.appendChild(row);
+    });
+
+    frameNamesSection.classList.remove("hidden");
+  }
+
+  // ── Resize Tool Tab ──────────────────────────────────────
+
+  resizeFileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) handleResizeFile(e.target.files[0]);
+  });
+
+  resizeDropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    resizeDropZone.classList.add("dragover");
+  });
+
+  resizeDropZone.addEventListener("dragleave", () => {
+    resizeDropZone.classList.remove("dragover");
+  });
+
+  resizeDropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    resizeDropZone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleResizeFile(e.dataTransfer.files[0]);
+  });
+
+  function handleResizeFile(file) {
+    if (!file.type.match(/^image\/(png|jpeg)$/)) {
+      alert("Please upload a PNG or JPEG image.");
+      return;
+    }
+    resizeFile = file;
+    resizedBlob = null;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        resizeOriginalImg = img;
+        resizeInfoFilename.textContent = file.name;
+        resizeInfoDimensions.textContent = img.width + " \u00d7 " + img.height + " px";
+        resizeImageInfo.classList.remove("hidden");
+        resizeOptionsSection.classList.remove("hidden");
+        resizePreviewSection.classList.add("hidden");
+        drawResizePreviewCanvas(resizeBeforeCanvas, img);
+        resizeBeforeInfo.textContent = img.width + " \u00d7 " + img.height + " px";
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function drawResizePreviewCanvas(canvas, img) {
+    const MAX = 320;
+    const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+
+  document.querySelectorAll('input[name="resize-mode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const isWidth = document.querySelector('input[name="resize-mode"]:checked').value === "width";
+      document.getElementById("resize-width-group").classList.toggle("hidden", !isWidth);
+      document.getElementById("resize-percent-group").classList.toggle("hidden", isWidth);
+    });
+  });
+
+  btnResizeApply.addEventListener("click", async () => {
+    if (!resizeFile) return;
+
+    btnResizeApply.disabled = true;
+    btnResizeApply.textContent = "Resizing...";
+    showStatus(resizeStatus, "", "");
+
+    try {
+      const mode = document.querySelector('input[name="resize-mode"]:checked').value;
+      const formData = new FormData();
+      formData.append("image", resizeFile);
+
+      if (mode === "width") {
+        const w = parseInt(document.getElementById("resize-width-val").value, 10);
+        if (!w || w <= 0) throw new Error("Invalid width value");
+        formData.append("width", String(w));
+      } else {
+        const pct = parseFloat(document.getElementById("resize-percent-val").value);
+        if (!pct || pct <= 0) throw new Error("Invalid percent value");
+        formData.append("percent", String(pct));
+      }
+
+      const res = await fetch(API_URL + "/api/resize", { method: "POST", body: formData });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || "Resize failed with status " + res.status);
+      }
+
+      resizedBlob = await res.blob();
+      const url = URL.createObjectURL(resizedBlob);
+      const img = new Image();
+      img.onload = () => {
+        drawResizePreviewCanvas(resizeAfterCanvas, img);
+        resizeAfterInfo.textContent = img.width + " \u00d7 " + img.height + " px";
+        resizePreviewSection.classList.remove("hidden");
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    } catch (err) {
+      showStatus(resizeStatus, "Error: " + err.message, "error");
+    } finally {
+      btnResizeApply.disabled = false;
+      btnResizeApply.textContent = "Resize \u0026 Preview";
+    }
+  });
+
+  btnResizeDownload.addEventListener("click", () => {
+    if (!resizedBlob) return;
+    const origName = resizeFile ? resizeFile.name.replace(/\.\w+$/, "") : "image";
+    triggerDownload(resizedBlob, origName + "_resized.png");
+  });
+
+  btnResizeAgain.addEventListener("click", () => {
+    resizePreviewSection.classList.add("hidden");
+    resizedBlob = null;
+    showStatus(resizeStatus, "", "");
+  });
+
 })();

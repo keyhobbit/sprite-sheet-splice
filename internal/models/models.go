@@ -6,11 +6,12 @@ type ExportRequest struct {
 }
 
 type FrameData struct {
-	ID     int `json:"id"`
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Width  int `json:"width"`
-	Height int `json:"height"`
+	ID     int    `json:"id"`
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Name   string `json:"name,omitempty"`
 }
 
 type GIFRequest struct {
